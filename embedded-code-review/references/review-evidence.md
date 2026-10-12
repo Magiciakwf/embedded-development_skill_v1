@@ -1,29 +1,23 @@
-# Evidence for specialized findings
+# Specialized Review Evidence
 
-## Concurrency and ownership
+Use only sections relevant to a concrete candidate. These checks do not require scanning every subsystem.
 
-Identify readers/writers, context and publication/release points. Explain a concrete interleaving, including whether a higher-urgency interrupt bypasses the RTOS critical section. Check multi-producer assumptions, lock ordering and releases on cancellation/error. A wait-for cycle is deadlock evidence only if its edges coexist. Priority inheritance applies to the relevant mutex/port semantics, not to every signaling object.
+## C, buffers and protocols
 
-Queues copy their configured item size; a queued pointer does not copy its pointee. Prove when the producer reuses/frees the object before consumption. Notification bits/events can coalesce; counting or mailbox APIs have different semantics. Report event loss only when every occurrence must be preserved.
+Trace input size through framing, parsing, copy/queue, buffer capacity, and consumer. Check zero, maximum, truncated, malformed, and repeated packets; compare sender/receiver limits. A queued pointer does not copy its pointee. For segmented transfers track cumulative offsets, including odd-length chunks before aligned accesses. Check reachable `switch` fall-through, integer narrowing, invalid shifts, pointer lifetime, and unchecked error returns. Distinguish dormant code from an active failure path.
 
-## DMA and MMIO
+## RTOS, ISR and ownership
 
-Trace buffer address from allocation/linker output to DMA engine, start, completion, processing and reuse. Cache defects require actual enabled data cache and cacheable mapping. Assess RX pre-transfer dirty lines as well as post-transfer invalidation and cache-line sharing. Never universalize a family-wide DMA memory prohibition; consult the actual bus matrix/engine.
+Identify readers/writers, execution contexts, publication, and resource ownership. Prove feasible interleavings, priority/critical-section behavior, lock ordering, and release on error. A wait-for cycle is deadlock only if its edges can coexist. Validate interrupt priorities against the actual FreeRTOS port and API contracts. `volatile` is not a lock; mutexes do not exclude DMA/ISRs. Notifications/events may coalesce; report loss only if every occurrence matters. A missing immediate `FromISR` yield can be latency rather than correctness. `taskYIELD()` does not guarantee a lower-priority ready task runs.
 
-W1C/W0C/read-to-clear/write-only/mixed registers require exact semantics. Account for debugger observation effects and IRQ reassertion. A missing `volatile` finding requires an actual MMIO/asynchronous access problem; adding it does not fix synchronization.
+## DMA, MMIO, timing and memory
 
-## Time and resource bounds
+Follow DMA buffer placement, accessibility, start/completion, CPU access, and reuse. Cache issues require an enabled data cache and cacheable region; consider cache-line sharing and pre/post-transfer maintenance. Verify the exact register's W1C/W0C/read-to-clear and interrupt semantics; macro names alone are insufficient. For deadlines establish a real bound, priority, tick units, wraparound, and required latency. A blocking call or large local array does not by itself prove failure; stack claims need allocation/call-path or measured-watermark evidence.
 
-For deadline findings cite priorities, a blocking/worst-case bound and required latency. A valid task wait is not a defect. A highest-priority task's `taskYIELD()` does not guarantee a lower-priority task runs in the standard fixed-priority scheduler.
+## Flash, OTA and persistent recovery
 
-For time arithmetic establish counter width, types, wrap horizon, units and observation frequency. Subtraction-based elapsed checks still require a bounded interval; deadline ordering can require stricter half-range assumptions. Check zero-tick rounding and conversion overflow.
+Verify device-specific erase size, programming width/alignment, legal bit transitions, and partition limits across *successive* chunks. Trace Bootloader–APP candidate selection, testing, confirmation, reset, retry, fallback, and subsequent boot. A rollback must persist; confirmation must satisfy the intended health criterion. Watchdog-based recovery requires an enabled watchdog and feasible feeding/timeout behavior. For metadata, check power cuts between erase and each write, valid-marker order, CRC/version, redundant-copy selection, and fallback for partly valid records. Distinguish recoverable hangs from irreversible loss. CRC/MD5 corruption checks do not prove firmware authenticity.
 
-A large local array is not proof of overflow. Establish configured stack, reachable call depth, compiler stack reports or measured margin and interrupt-stack contribution. High-water marks depend on executed paths and written bytes; untouched stack reservations can overstate margin.
+## Targeted validation
 
-## Persistence and recovery
-
-Prove illegal erase/program alignment, execution restrictions or power-loss commit ordering from code and exact storage specifications. Distinguish immediate corruption, recoverability and endurance. Review bootloader/application boundaries, commit metadata, CRC/version, sequence wrap and recovery after interrupted writes where relevant.
-
-## Validation questions
-
-Every recommended check should resolve a named uncertainty: inspect one IRQ's priority and actual RTOS threshold; watch the first overwritten address; compare buffer VMA with the DMA bus map; drive maximum/truncated input through a parser; interrupt a specific commit phase. Avoid generic requests to add logging or stress everything.
+Propose the smallest experiment resolving a specific uncertainty: malformed frame, first misaligned write, exact IRQ priority, DMA address, power cut during metadata commit, or the next boot after rollback. Distinguish observations, source deductions, and untested hypotheses; avoid generic logging or stress-test prescriptions.

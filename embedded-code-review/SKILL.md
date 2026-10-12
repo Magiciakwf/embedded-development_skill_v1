@@ -1,34 +1,22 @@
 ---
 name: embedded-code-review
-description: "Review embedded C/C++ changes or existing firmware for reachable, evidence-backed correctness, concurrency, ISR, DMA, timing and storage defects. Use for review findings, not unsolicited rewrites or broad runtime triage."
+description: "Review existing embedded C/C++ firmware or diffs for reachable correctness, memory, protocol, ISR/RTOS, DMA, timing, and Flash/OTA defects. Use for read-only, evidence-backed bug review; not implementation or open-ended runtime troubleshooting."
 ---
 
 # Embedded Code Review
 
-Review the requested scope for defects that can manifest on the actual target. Reply in the user's language. Prioritize a few supported findings; zero findings is a valid outcome.
+Review the requested scope for defects that can occur on the actual target. Reply in the user's language. Do not modify the project or generate build artifacts. Zero supported findings is valid.
 
-## Establish scope and runtime paths
+## Focused review workflow
 
-For a diff/PR/commit, review changed code first and follow relevant callers, definitions and configuration. For a full review, prioritize user-named modules and reachable data/interrupt paths. Honor the provided scope; do not broaden into a repository rewrite.
+1. **Establish context selectively.** Identify the MCU, active build configuration, RTOS/SDK, and task/ISR/boot context only where relevant. Distinguish committed configuration from the actual built image; a host GCC check is not an ARMCC/Keil build.
+2. **Start narrow.** For a diff, inspect changed lines and necessary callers. For a named module, trace reachable inputs and outputs. For an open-ended review, prioritize user-owned entry points and high-risk data, interrupt, and recovery paths; avoid wholesale vendor-library reading.
+3. **Fast first pass.** In relevant paths check bounds, length/offset arithmetic, pointer lifetime, integer conversions, `switch` fall-through, error handling, and protocol validation. Include synchronization, DMA ownership, Flash alignment/partition bounds, and OTA state transitions when applicable. Do not apply every check to every file.
+4. **Trace and refute candidates.** Follow only the callers, consumers, configurations, and failure paths needed to confirm a suspected defect. Reuse evidence instead of rereading unchanged files. For a complex domain, read only the relevant sections of [references/review-evidence.md](references/review-evidence.md).
+5. **Stop on purpose.** Cover all explicitly requested paths. For an open-ended review, once key paths and strong findings have been checked, report coverage and blind spots instead of expanding indefinitely. About 3–5 confirmed findings is a checkpoint, **not** a hard cap or an excuse to skip requested exhaustive coverage.
 
-Inspect the target, build configuration, RTOS/SDK version and execution context only as needed to assess a candidate finding. Model producer, consumer, object lifetime, ownership, priority/preemption and error/recovery transitions. Repository macro names alone do not establish register side effects; consult exact documentation when material.
+## Proof and output
 
-## Prove each candidate
+For each finding show `reachable trigger -> execution path/interleaving -> violated contract -> realistic consequence`. Check counterevidence such as caller bounds, excluded builds, locks, and device semantics. Distinguish **confirmed defects**, **conditional risks**, and **unresolved questions**; do not turn missing evidence into high severity.
 
-Use `reachable trigger -> execution path/interleaving -> violated contract -> runtime consequence`.
-
-- Memory/arithmetic: show the input/state reaching the out-of-bounds access, truncation, overflow, invalid shift, alignment or lifetime violation. Check actual types and caller guarantees.
-- Shared state: show the unsafe interleaving, masks/locks and actual asynchronous writers. `volatile` neither makes a transaction atomic nor transfers DMA ownership.
-- ISR/RTOS: establish the calling context, API contract, configured priorities and blocked/wake behavior. A missing immediate ISR yield may be a latency issue; do not mechanically report it after every `FromISR` call.
-- MMIO/DMA: check documented read/write side effects, accessibility, lifetime, reuse and cacheability on the actual device. A task lock does not stop DMA.
-- Timing/storage: establish the deadline, blocking bound, tick assumptions, erase/program contract or torn-write mechanism rather than generic risk.
-
-For deeper review of relevant domains read [references/review-evidence.md](references/review-evidence.md). Do not load or walk every domain by default.
-
-Actively look for a refutation: bounds enforced by callers, excluded build paths, hardware atomicity, established ownership, correct cache mapping or a lock you initially missed. Group multiple symptoms of the same defect. Separate conditional questions from confirmed findings. Never raise severity to compensate for missing evidence.
-
-## Deliver actionable findings
-
-Lead with the overall conclusion; list actionable defects by realistic impact and likelihood. Each needs a precise file/line or symbol, trigger, violated invariant, consequence and minimal fix. Include an explicit interleaving for races and a focused validation when useful. Use the repository/request severity scheme; absent one, reserve Critical for credible severe system impact, High for realistic functional failure, Medium/Low for narrower or limited impact. A possible HardFault alone does not automatically make a finding Critical.
-
-Place unknown device/configuration dependencies under unresolved questions with the exact evidence needed. Say when no credible defect was found and note material coverage limits. Do not emit repetitive counts, empty sections, style complaints or ungrounded NULL/stack/cache warnings. A review request does not by itself request applying patches.
+Lead with the conclusion, then report each actionable issue with **severity, file:line, trigger/path, consequence, and minimal safe fix**. Show an interleaving for races and a targeted validation when needed. Group issues with the same root cause. State what was reviewed, skipped, compiled, or tested; never claim unperformed verification. Exclude generic style, `volatile`, NULL, stack, or HardFault warnings without a reachable mechanism. Remain read-only unless separately authorized to fix code.
